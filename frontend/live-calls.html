@@ -1,0 +1,1085 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>KARMA — Live Intercept</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='36' height='36' viewBox='0 0 36 36'%3E%3Ccircle cx='18' cy='18' r='16' stroke='%23C4F82A' stroke-width='2.5' stroke-dasharray='4 3' fill='none'/%3E%3Cpath d='M18 6V18L26 26' stroke='%23C4F82A' stroke-width='2.5' stroke-linecap='round' fill='none'/%3E%3Ccircle cx='18' cy='18' r='3' fill='%23C4F82A'/%3E%3C/svg%3E" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+  <link rel="stylesheet" href="dashboard.css" />
+</head>
+<body>
+<div class="app-shell">
+
+  <!-- ===== SIDEBAR ===== -->
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <div class="brand-icon">
+        <svg width="22" height="22" viewBox="0 0 36 36" fill="none">
+          <circle cx="18" cy="18" r="16" stroke="currentColor" stroke-width="2.5" stroke-dasharray="4 3"/>
+          <path d="M18 6V18L26 26" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
+          <circle cx="18" cy="18" r="3" fill="currentColor"/>
+        </svg>
+      </div>
+      <div>
+        <div class="brand-name">KARMA <span style="color:var(--accent)">AI</span></div>
+        <div class="brand-sub">INTERCEPT SYSTEM</div>
+      </div>
+    </div>
+
+    <nav class="sidebar-nav">
+      <a href="live-calls.html" class="nav-item active">
+        <i data-lucide="radio" class="nav-icon"></i>
+        <span>Live Intercept</span>
+      </a>
+      <a href="analytics.html" class="nav-item">
+        <i data-lucide="bar-chart-2" class="nav-icon"></i>
+        <span>Analytics</span>
+      </a>
+    </nav>
+
+    <!-- Call List -->
+    <div class="call-list">
+      <div class="call-list-header">CALLS</div>
+      <div class="call-list-items" id="callListItems">
+        <div class="call-list-empty" id="callListEmpty">
+          <i data-lucide="phone-off" style="width:20px;height:20px;opacity:0.3;margin-bottom:4px"></i>
+          <div>No calls yet</div>
+          <div style="font-size:9px;margin-top:2px">Waiting for incoming...</div>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ===== MAIN AREA ===== -->
+  <div class="main-area">
+
+    <!-- Top Bar -->
+    <header class="top-bar">
+      <div class="top-bar-left">
+        <h2 class="page-title">Session: <span id="sessionId">—</span></h2>
+        <span class="threat-tag high" id="threatTag" style="display:none">HIGH THREAT</span>
+      </div>
+      <div class="top-bar-right">
+        <p class="session-meta" id="sessionMeta">Select a call or wait for incoming</p>
+      </div>
+    </header>
+
+    <!-- Content Body -->
+    <div class="content-body chat-layout">
+
+      <!-- Chat Panel -->
+      <div class="transcript-panel">
+
+        <!-- Chat Header -->
+        <div class="chat-header" id="chatHeader" style="display:none">
+          <div class="chat-header-avatar">
+            <i data-lucide="user-x" style="width:20px;height:20px"></i>
+          </div>
+          <div class="chat-header-info">
+            <div class="chat-header-name" id="chatCallerName">Scammer</div>
+            <div class="chat-header-status" id="chatCallerStatus">online</div>
+          </div>
+          <div class="chat-header-right">
+            <div class="chat-live-badge" id="chatLiveBadge" style="display:none">
+              <div class="dot"></div>
+              <span>LIVE</span>
+            </div>
+            <div class="chat-timer" id="chatTimer">00:00</div>
+          </div>
+        </div>
+
+        <!-- Transcript topbar (when no call selected) -->
+        <div class="transcript-topbar" id="transcriptTopbar">
+          <span class="transcript-label">LIVE VOICE TRANSCRIPTION</span>
+          <div class="sync-pill">
+            <div class="waveform">
+              <span></span><span></span><span></span><span></span><span></span>
+            </div>
+            <span id="syncStatus">CONNECTING...</span>
+          </div>
+        </div>
+
+        <!-- Chat Feed -->
+        <div class="transcript-feed wa-feed" id="transcriptFeed">
+          <!-- Empty state shown when no call selected -->
+          <div class="wa-empty-state" id="emptyState">
+            <i data-lucide="message-circle" style="width:48px;height:48px"></i>
+            <p>Select a call from the sidebar or wait for an incoming call</p>
+          </div>
+
+          <!-- Typing indicator (inside feed so it scrolls with content) -->
+          <div class="wa-typing" id="typingIndicator">
+            <div class="wa-typing-bubble">
+              <div class="wa-typing-dot"></div>
+              <div class="wa-typing-dot"></div>
+              <div class="wa-typing-dot"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Scroll to bottom FAB (positioned relative to transcript-panel) -->
+        <div class="scroll-fab" id="scrollFab" onclick="scrollToBottom()">
+          <i data-lucide="chevron-down" style="width:16px;height:16px"></i>
+          <div class="scroll-fab-badge" id="scrollFabBadge" style="display:none">0</div>
+        </div>
+      </div>
+
+      <!-- Intel + Analysis Panel -->
+      <aside class="intel-panel expanded">
+        <div class="intel-section">
+          <div class="intel-section-label">SCAMMER INTEL</div>
+          <div class="intel-row">
+            <div class="intel-key" id="intelKey0">ORIGIN IP</div>
+            <div class="intel-val" id="intelVal0">—</div>
+          </div>
+          <div class="intel-row">
+            <div class="intel-key" id="intelKey1">DEVICE FINGERPRINT</div>
+            <div class="intel-val" id="intelVal1">—</div>
+          </div>
+          <div class="intel-row">
+            <div class="intel-key" id="intelKey2">CARRIER INFO</div>
+            <div class="intel-val" id="intelVal2">—</div>
+          </div>
+          <div class="intel-row">
+            <div class="intel-key" id="intelKey3">ESTIMATED LOCATION</div>
+            <div class="intel-val" id="intelVal3">—</div>
+          </div>
+        </div>
+
+        <div class="intel-controls">
+          <button class="ctrl-btn drop" id="dropBtn">DROP CALL</button>
+        </div>
+
+        <div class="intel-status">
+          <div class="status-row">
+            <span class="status-key">SESSION TIME</span>
+            <span class="status-val" id="liveTimer">00:00</span>
+          </div>
+          <div class="status-row" style="margin-top: 12px;">
+            <span class="status-key">AI STATUS</span>
+            <span class="status-val accent" id="aiStatusVal">IDLE</span>
+          </div>
+        </div>
+
+        <!-- Analysis Section -->
+        <div class="analysis-section">
+          <button class="analysis-btn" id="analysisBtn" disabled>
+            <i data-lucide="brain" style="width:14px;height:14px"></i>
+            Analyze Conversation
+          </button>
+
+          <div class="analysis-card" id="analysisCard">
+            <!-- Filled dynamically by JS -->
+          </div>
+        </div>
+      </aside>
+
+    </div>
+  </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  lucide.createIcons();
+
+  // ── DOM References ─────────────────────────────────────
+  const feed = document.getElementById('transcriptFeed');
+  const emptyState = document.getElementById('emptyState');
+  const chatHeader = document.getElementById('chatHeader');
+  const transcriptTopbar = document.getElementById('transcriptTopbar');
+  const chatCallerName = document.getElementById('chatCallerName');
+  const chatCallerStatus = document.getElementById('chatCallerStatus');
+  const chatLiveBadge = document.getElementById('chatLiveBadge');
+  const chatTimer = document.getElementById('chatTimer');
+  const aiStatusVal = document.getElementById('aiStatusVal');
+
+  const dropBtn = document.getElementById('dropBtn');
+  const timerEl = document.getElementById('liveTimer');
+  const sessionIdEl = document.getElementById('sessionId');
+  const threatTag = document.getElementById('threatTag');
+  const syncStatus = document.getElementById('syncStatus');
+  const sessionMeta = document.getElementById('sessionMeta');
+  const typingIndicator = document.getElementById('typingIndicator');
+  const scrollFab = document.getElementById('scrollFab');
+  const scrollFabBadge = document.getElementById('scrollFabBadge');
+  const callListItems = document.getElementById('callListItems');
+  const callListEmpty = document.getElementById('callListEmpty');
+  const analysisBtn = document.getElementById('analysisBtn');
+  const analysisCard = document.getElementById('analysisCard');
+
+  let activeCallSid = null;       // Currently selected/viewing call
+  let liveCallSids = new Set();   // All currently live calls
+  let timerInterval = null;
+  let callStartTime = null;
+  let connected = false;
+  let userScrolledUp = false;
+  let unreadCount = 0;
+  let lastSpeaker = null;         // For message grouping
+  let lastMessageDate = null;     // For day separators
+  let callsData = {};             // call_sid -> { caller, startTime, lastMessage, status }
+  let timerStarted = false;       // Timer starts on first message, not on call start
+  let inactivityTimeout = null;   // Auto-drop after 60s of silence
+  const INACTIVITY_LIMIT = 60000; // 1 minute
+
+  // ── Socket.IO Connection ───────────────────────────────
+  const BACKEND_URL = window.location.origin;
+  const socket = io(BACKEND_URL, {
+    transports: ['websocket', 'polling'],
+    query: { role: 'dashboard' }
+  });
+
+  socket.on('connect', () => {
+    connected = true;
+    syncStatus.textContent = 'CONNECTED';
+    console.log('[SIO] Connected to backend');
+    // Fetch initial call list
+    fetchCallList();
+  });
+
+  socket.on('disconnect', () => {
+    connected = false;
+    syncStatus.textContent = 'DISCONNECTED';
+    console.log('[SIO] Disconnected');
+  });
+
+  // ── Call List Management ─────────────────────────────────
+  function fetchCallList() {
+    fetch(BACKEND_URL + '/api/active-calls')
+      .then(r => r.json())
+      .then(data => {
+        liveCallSids.clear();
+        (data.calls || []).forEach(c => {
+          liveCallSids.add(c.id);
+          callsData[c.id] = {
+            caller: c.caller_number || 'Unknown',
+            startTime: c.start_time,
+            status: 'active',
+            mode: c.mode || 'twilio',
+            lastMessage: ''
+          };
+        });
+        renderCallList();
+      })
+      .catch(() => {});
+
+    // Also fetch recent history
+    fetch(BACKEND_URL + '/api/calls?limit=15')
+      .then(r => r.json())
+      .then(data => {
+        (data.calls || []).forEach(c => {
+          if (!callsData[c.id]) {
+            callsData[c.id] = {
+              caller: c.caller_number || 'Unknown',
+              startTime: c.start_time,
+              status: c.status || 'completed',
+              mode: c.mode || 'twilio',
+              lastMessage: '',
+              duration: c.duration_seconds || 0
+            };
+          }
+        });
+        renderCallList();
+      })
+      .catch(() => {});
+  }
+
+  function renderCallList() {
+    const items = Object.entries(callsData)
+      .sort((a, b) => {
+        // Active calls first, then by time
+        const aActive = a[1].status === 'active' ? 1 : 0;
+        const bActive = b[1].status === 'active' ? 1 : 0;
+        if (aActive !== bActive) return bActive - aActive;
+        return (b[1].startTime || '').localeCompare(a[1].startTime || '');
+      });
+
+    if (items.length === 0) {
+      callListEmpty.style.display = '';
+      return;
+    }
+
+    callListEmpty.style.display = 'none';
+
+    // Keep existing items, update or add
+    const existingIds = new Set();
+    callListItems.querySelectorAll('.call-item').forEach(el => {
+      existingIds.add(el.dataset.callId);
+    });
+
+    // Clear and rebuild
+    const frag = document.createDocumentFragment();
+    items.forEach(([sid, data]) => {
+      const isLive = data.status === 'active';
+      const isSelected = sid === activeCallSid;
+      const callerShort = formatCaller(data.caller);
+      const timeStr = formatTime(data.startTime);
+
+      const div = document.createElement('div');
+      div.className = `call-item${isSelected ? ' active' : ''}`;
+      div.dataset.callId = sid;
+      div.onclick = () => selectCall(sid);
+
+      div.innerHTML = `
+        <div class="call-item-avatar${isLive ? ' live' : ''}">
+          <span>${callerShort.charAt(0).toUpperCase()}</span>
+        </div>
+        <div class="call-item-info">
+          <div class="call-item-name">${escapeHtml(callerShort)}</div>
+          <div class="call-item-preview">${escapeHtml(data.lastMessage || (isLive ? 'Active call...' : 'Call ended'))}</div>
+        </div>
+        <div class="call-item-meta">
+          <div class="call-item-time">${timeStr}</div>
+          <div class="call-item-badge ${isLive ? 'live' : 'ended'}">${isLive ? 'LIVE' : formatDuration(data.duration || 0)}</div>
+        </div>
+        <button class="call-item-delete" data-sid="${sid}" title="Delete conversation" onclick="event.stopPropagation(); deleteCall('${sid}')">
+          <i data-lucide="trash-2" style="width:12px;height:12px"></i>
+        </button>
+      `;
+      frag.appendChild(div);
+    });
+
+    // Replace content (keep empty el)
+    Array.from(callListItems.children).forEach(ch => {
+      if (ch !== callListEmpty) ch.remove();
+    });
+    callListItems.appendChild(frag);
+    lucide.createIcons();
+  }
+
+  // ── Select / Switch Call ─────────────────────────────────
+  function selectCall(callSid) {
+    activeCallSid = callSid;
+    const data = callsData[callSid];
+    const isLive = data && data.status === 'active';
+
+    // Update header
+    sessionIdEl.textContent = callSid.length > 16 ? callSid.slice(0, 16) + '...' : callSid;
+    sessionMeta.textContent = `Mode: ${(data?.mode || 'unknown').toUpperCase()} | Caller: ${data?.caller || 'Unknown'}`;
+    threatTag.style.display = '';
+    threatTag.textContent = 'HIGH THREAT';
+
+    // Show chat header, HIDE transcript topbar
+    chatHeader.style.display = '';
+    transcriptTopbar.style.display = 'none';
+    chatCallerName.textContent = formatCaller(data?.caller || 'Unknown');
+    chatCallerStatus.textContent = isLive ? 'on call' : 'call ended';
+    chatLiveBadge.style.display = isLive ? '' : 'none';
+    lucide.createIcons();
+
+    // Enable analysis button
+    analysisBtn.disabled = false;
+
+    // Clear chat
+    clearChat();
+
+    if (isLive) {
+      // Live call — timer starts on first message, not here
+      aiStatusVal.textContent = 'ACTIVE';
+      aiStatusVal.style.color = 'var(--accent)';
+      timerStarted = false;
+      timerEl.textContent = '00:00';
+      chatTimer.textContent = '00:00';
+      loadTranscript(callSid);  // Catch up on any messages sent before dashboard connected
+    } else {
+      // Historical call — fetch full transcript
+      aiStatusVal.textContent = 'OFFLINE';
+      aiStatusVal.style.color = 'var(--text-dim)';
+      if (timerInterval) clearInterval(timerInterval);
+      timerEl.textContent = formatDuration(data?.duration || 0);
+      chatTimer.textContent = formatDuration(data?.duration || 0);
+      loadTranscript(callSid);
+    }
+
+    renderCallList();
+  }
+
+  function clearChat() {
+    // Remove all messages but keep emptyState and typingIndicator
+    Array.from(feed.children).forEach(ch => {
+      if (ch !== emptyState && ch !== typingIndicator) ch.remove();
+    });
+    emptyState.style.display = 'none';
+    typingIndicator.classList.remove('visible');
+    lastSpeaker = null;
+    lastMessageDate = null;
+    unreadCount = 0;
+    scrollFab.classList.remove('visible');
+    analysisCard.innerHTML = '';
+    analysisCard.classList.remove('visible');
+    clearInactivityTimer();
+    timerStarted = false;
+  }
+
+  function loadTranscript(callSid) {
+    fetch(BACKEND_URL + '/api/calls/' + callSid + '/transcript')
+      .then(r => r.json())
+      .then(data => {
+        if (callSid !== activeCallSid) return; // User switched
+        const msgs = data.messages || [];
+        msgs.forEach(m => {
+          if (m.role === 'system') return;
+          const speaker = m.role === 'user' ? 'scammer' : 'ai';
+          addMessage(speaker, m.content, m.timestamp, false);
+        });
+        feed.scrollTop = feed.scrollHeight;
+
+        // Also update intel
+        const intel = data.intel || [];
+        intel.forEach(i => applyIntel(i));
+      })
+      .catch(err => {
+        console.error('Failed to load transcript:', err);
+      });
+  }
+
+  // ── Delete Call ─────────────────────────────────────────
+  window.deleteCall = function(callSid) {
+    if (!confirm('Delete this conversation permanently?')) return;
+
+    fetch(BACKEND_URL + '/api/calls/' + callSid, { method: 'DELETE' })
+      .then(r => r.json())
+      .then(() => {
+        // Remove from local state
+        delete callsData[callSid];
+        liveCallSids.delete(callSid);
+
+        // If we were viewing this call, reset the view
+        if (callSid === activeCallSid) {
+          activeCallSid = null;
+          clearChat();
+          emptyState.style.display = '';
+          chatHeader.style.display = 'none';
+          transcriptTopbar.style.display = '';
+          sessionIdEl.textContent = '—';
+          sessionMeta.textContent = 'Select a call or wait for incoming';
+          threatTag.style.display = 'none';
+          aiStatusVal.textContent = 'IDLE';
+          aiStatusVal.style.color = 'var(--text-dim)';
+          if (timerInterval) clearInterval(timerInterval);
+          timerEl.textContent = '00:00';
+          chatTimer.textContent = '00:00';
+          analysisBtn.disabled = true;
+        }
+
+        renderCallList();
+      })
+      .catch(err => {
+        console.error('Failed to delete call:', err);
+      });
+  };
+
+  // ── Call Lifecycle (Socket.IO) ──────────────────────────
+  socket.on('call_started', (data) => {
+    const sid = data.call_sid;
+    liveCallSids.add(sid);
+    callsData[sid] = {
+      caller: data.caller || 'Unknown',
+      startTime: data.timestamp || new Date().toISOString(),
+      status: 'active',
+      mode: 'twilio',
+      lastMessage: ''
+    };
+    renderCallList();
+
+    // Auto-select if no call is selected
+    if (!activeCallSid) {
+      selectCall(sid);
+    }
+  });
+
+  socket.on('call_ended', (data) => {
+    const sid = data.call_sid;
+    liveCallSids.delete(sid);
+    if (callsData[sid]) {
+      callsData[sid].status = 'completed';
+      callsData[sid].duration = data.duration || 0;
+    }
+    renderCallList();
+
+    if (sid === activeCallSid) {
+      chatCallerStatus.textContent = 'call ended';
+      chatLiveBadge.style.display = 'none';
+      aiStatusVal.textContent = 'OFFLINE';
+      aiStatusVal.style.color = 'var(--text-dim)';
+      if (timerInterval) clearInterval(timerInterval);
+      clearInactivityTimer();
+      timerStarted = false;
+    }
+  });
+
+  socket.on('call_list_update', (data) => {
+    // Full refresh of call data
+    const activeCalls = data.active_calls || [];
+    const recentCalls = data.recent_calls || [];
+
+    liveCallSids.clear();
+    activeCalls.forEach(c => {
+      liveCallSids.add(c.id);
+      callsData[c.id] = {
+        ...callsData[c.id],
+        caller: c.caller_number || callsData[c.id]?.caller || 'Unknown',
+        startTime: c.start_time || callsData[c.id]?.startTime,
+        status: 'active',
+        mode: c.mode || 'twilio'
+      };
+    });
+
+    recentCalls.forEach(c => {
+      if (!liveCallSids.has(c.id)) {
+        callsData[c.id] = {
+          ...callsData[c.id],
+          caller: c.caller_number || callsData[c.id]?.caller || 'Unknown',
+          startTime: c.start_time || callsData[c.id]?.startTime,
+          status: c.status || 'completed',
+          mode: c.mode || 'twilio',
+          duration: c.duration_seconds || 0
+        };
+      }
+    });
+
+    renderCallList();
+  });
+
+  // ── Transcript Messages ────────────────────────────────
+  socket.on('transcript_message', (data) => {
+    const sid = data.call_sid;
+
+    // If we don't know this call yet, register it
+    if (!callsData[sid]) {
+      callsData[sid] = {
+        caller: 'Unknown',
+        startTime: new Date().toISOString(),
+        status: 'active',
+        mode: 'unknown',
+        lastMessage: ''
+      };
+      liveCallSids.add(sid);
+    }
+
+    // Update call preview
+    callsData[sid].lastMessage = data.text.slice(0, 50);
+    renderCallList();
+
+    // Auto-select if no call is currently viewed
+    if (!activeCallSid) {
+      selectCall(sid);
+      return; // selectCall loads transcript, don't double-add
+    }
+
+    // Start timer on first message (not on call start)
+    if (sid === activeCallSid && !timerStarted && liveCallSids.has(sid)) {
+      timerStarted = true;
+      startTimer();
+    }
+
+    // Reset inactivity timeout on every message for the active live call
+    if (sid === activeCallSid && liveCallSids.has(sid)) {
+      resetInactivityTimer();
+    }
+
+    // Only render if this is the selected call
+    if (sid !== activeCallSid) return;
+
+    // Deduplicate: skip if this exact message text is already the last bubble
+    const lastBubble = feed.querySelector('.wa-msg:last-of-type .wa-bubble');
+    if (lastBubble) {
+      // Compare text content (strip the timestamp child)
+      const lastText = lastBubble.childNodes[0]?.textContent?.trim();
+      if (lastText === data.text.trim()) return; // Already shown (from loadTranscript)
+    }
+
+    addMessage(data.speaker, data.text, data.timestamp, true);
+  });
+
+  // ── Typing Indicator ────────────────────────────────────
+  socket.on('typing_indicator', (data) => {
+    if (data.call_sid !== activeCallSid) return;
+    if (data.typing) {
+      typingIndicator.classList.add('visible');
+      feed.scrollTop = feed.scrollHeight;
+    } else {
+      typingIndicator.classList.remove('visible');
+    }
+  });
+
+  // ── AI Status ──────────────────────────────────────────
+  socket.on('ai_status', (data) => {
+    aiStatusVal.textContent = data.status;
+    if (data.status === 'ANALYZING...') {
+      aiStatusVal.style.color = 'var(--orange)';
+    } else if (data.status === 'MUTED') {
+      aiStatusVal.style.color = 'var(--red)';
+    } else {
+      aiStatusVal.style.color = 'var(--accent)';
+    }
+  });
+
+  // ── Intel Updates ──────────────────────────────────────
+  socket.on('intel_update', (data) => {
+    if (data.call_sid !== activeCallSid) return;
+    applyIntel(data);
+  });
+
+  function applyIntel(data) {
+    if (data.scammer_name || data.field_name === 'scammer_name') {
+      const val = data.scammer_name || data.field_value;
+      document.getElementById('intelKey0').textContent = 'SCAMMER NAME';
+      document.getElementById('intelVal0').textContent = val;
+      chatCallerName.textContent = val;
+    }
+    if (data.scam_type || data.field_name === 'scam_type') {
+      const val = data.scam_type || data.field_value;
+      document.getElementById('intelKey1').textContent = 'SCAM TYPE';
+      document.getElementById('intelVal1').textContent = val;
+    }
+    if (data.organization_claimed || data.field_name === 'organization_claimed') {
+      const val = data.organization_claimed || data.field_value;
+      document.getElementById('intelKey2').textContent = 'CLAIMS TO BE';
+      document.getElementById('intelVal2').textContent = val;
+    }
+    if (data.location || data.field_name === 'location') {
+      const val = data.location || data.field_value;
+      document.getElementById('intelVal3').textContent = val;
+    }
+    if (data.upi_id || data.field_name === 'upi_id') {
+      const val = data.upi_id || data.field_value;
+      document.getElementById('intelKey3').textContent = 'UPI ID';
+      document.getElementById('intelVal3').textContent = val;
+    }
+    if (data.phone_number || data.field_name === 'phone_number') {
+      document.getElementById('intelKey0').textContent = 'PHONE NUMBER';
+      document.getElementById('intelVal0').textContent = data.phone_number || data.field_value;
+    }
+  }
+
+  // ── Add Message (WhatsApp Style) ─────────────────────────
+  function addMessage(speaker, text, timestamp, animate) {
+    const isScammer = speaker === 'scammer';
+    const isSameSpeaker = lastSpeaker === speaker;
+
+    // Day separator
+    const msgDate = timestamp ? new Date(timestamp) : new Date();
+    const dateStr = msgDate.toDateString();
+    if (lastMessageDate !== dateStr) {
+      const sep = document.createElement('div');
+      sep.className = 'wa-day-sep';
+      sep.innerHTML = `<span>${formatDateLabel(msgDate)}</span>`;
+      feed.insertBefore(sep, typingIndicator);
+      lastMessageDate = dateStr;
+    }
+
+    const div = document.createElement('div');
+    const hasTail = !isSameSpeaker;
+    div.className = `wa-msg ${speaker}${hasTail ? ' has-tail' : ''}${isSameSpeaker ? ' same-speaker' : ''}`;
+
+    const label = isScammer ? 'SCAMMER' : 'DADI AI';
+    const timeStr = formatMessageTime(msgDate);
+
+    let html = '';
+    if (hasTail) {
+      html += `<div class="wa-speaker">${label}</div>`;
+    }
+    html += `<div class="wa-bubble">${escapeHtml(text)}<div class="wa-time">${timeStr}</div></div>`;
+
+    div.innerHTML = html;
+
+    if (!animate) {
+      div.classList.add('visible');
+    }
+
+    // Insert before typing indicator (which stays at the bottom of feed)
+    feed.insertBefore(div, typingIndicator);
+
+    if (animate) {
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        div.classList.add('visible');
+      }));
+    }
+
+    lastSpeaker = speaker;
+
+    // Auto-scroll logic
+    if (!userScrolledUp) {
+      feed.scrollTop = feed.scrollHeight;
+    } else if (animate) {
+      unreadCount++;
+      scrollFabBadge.textContent = unreadCount;
+      scrollFabBadge.style.display = '';
+      scrollFab.classList.add('visible');
+    }
+  }
+
+  // ── Scroll Detection ──────────────────────────────────
+  feed.addEventListener('scroll', () => {
+    const distFromBottom = feed.scrollHeight - feed.scrollTop - feed.clientHeight;
+    userScrolledUp = distFromBottom > 80;
+    if (!userScrolledUp) {
+      scrollFab.classList.remove('visible');
+      unreadCount = 0;
+    }
+  });
+
+  window.scrollToBottom = function() {
+    feed.scrollTop = feed.scrollHeight;
+    userScrolledUp = false;
+    scrollFab.classList.remove('visible');
+    unreadCount = 0;
+  };
+
+  // ── Controls ───────────────────────────────────────────
+  dropBtn.addEventListener('click', () => {
+    if (!confirm('Terminate interception session?')) return;
+    if (activeCallSid) {
+      socket.emit('drop_call', { call_sid: activeCallSid });
+    }
+  });
+
+  // ── Analysis ───────────────────────────────────────────
+  analysisBtn.addEventListener('click', () => {
+    if (!activeCallSid) return;
+
+    analysisBtn.disabled = true;
+    analysisBtn.innerHTML = '<div class="spinner"></div> Analyzing...';
+
+    fetch(BACKEND_URL + '/api/calls/' + activeCallSid + '/analysis')
+      .then(r => r.json())
+      .then(data => {
+        analysisBtn.innerHTML = '<i data-lucide="check" style="width:14px;height:14px"></i> Analysis Complete';
+        analysisBtn.disabled = false;
+        lucide.createIcons();
+
+        if (data.analysis) {
+          renderAnalysis(data.analysis);
+        } else if (data.raw_summary) {
+          renderFallbackSummary(data.raw_summary);
+        }
+      })
+      .catch(err => {
+        console.error('Analysis error:', err);
+        analysisBtn.innerHTML = '<i data-lucide="x" style="width:14px;height:14px"></i> Error';
+        analysisBtn.disabled = false;
+        lucide.createIcons();
+        setTimeout(() => {
+          analysisBtn.innerHTML = '<i data-lucide="brain" style="width:14px;height:14px"></i> Analyze Conversation';
+          lucide.createIcons();
+        }, 2000);
+      });
+  });
+
+  function renderAnalysis(a) {
+    const p = a.scammer_profile || {};
+    const s = a.scam_analysis || {};
+    const e = a.extracted_data || {};
+    const m = a.call_metrics || {};
+    const threatLvl = (s.threat_level || 'HIGH').toLowerCase();
+    const frustLvl = (m.scammer_frustration_level || 'MEDIUM').toLowerCase();
+
+    let html = '';
+
+    // Profile
+    html += `
+      <div class="analysis-group">
+        <div class="analysis-group-label"><i data-lucide="user" style="width:12px;height:12px"></i> SCAMMER PROFILE</div>
+        ${analysisRow('Name', p.name || '—')}
+        ${analysisRow('Organization', p.organization_claimed || '—')}
+        ${analysisRow('Phone', p.phone_number || '—')}
+        ${analysisRow('Location Hints', p.location_hints || '—')}
+      </div>
+    `;
+
+    // Scam Analysis
+    html += `
+      <div class="analysis-group">
+        <div class="analysis-group-label"><i data-lucide="shield-alert" style="width:12px;height:12px"></i> SCAM ANALYSIS</div>
+        ${analysisRow('Type', s.type || '—')}
+        ${analysisRow('Sophistication', s.sophistication || '—')}
+        <div style="margin:6px 0">
+          <div class="analysis-key" style="margin-bottom:4px">Threat Level</div>
+          <div class="threat-bar">
+            <div class="threat-bar-track"><div class="threat-bar-fill ${threatLvl}"></div></div>
+            <span class="threat-bar-label ${threatLvl}">${(s.threat_level || 'HIGH').toUpperCase()}</span>
+          </div>
+        </div>
+        ${(s.tactics_used && s.tactics_used.length > 0) ? `
+          <div style="margin-top:6px">
+            <div class="analysis-key" style="margin-bottom:4px">Tactics</div>
+            <div class="tactic-tags">
+              ${s.tactics_used.map(t => `<span class="tactic-tag">${escapeHtml(t)}</span>`).join('')}
+            </div>
+          </div>
+        ` : ''}
+      </div>
+    `;
+
+    // Extracted Data
+    const allData = [
+      ...(e.upi_ids || []).map(v => ({ label: 'UPI', value: v })),
+      ...(e.phone_numbers || []).map(v => ({ label: 'Phone', value: v })),
+      ...(e.bank_accounts || []).map(v => ({ label: 'Account', value: v })),
+      ...(e.aadhaar_numbers || []).map(v => ({ label: 'Aadhaar', value: v })),
+      ...(e.banks_mentioned || []).map(v => ({ label: 'Bank', value: v })),
+    ];
+
+    if (allData.length > 0) {
+      html += `
+        <div class="analysis-group">
+          <div class="analysis-group-label"><i data-lucide="database" style="width:12px;height:12px"></i> EXTRACTED DATA</div>
+          <div class="extracted-items">
+            ${allData.map(d => `
+              <div class="extracted-item">
+                <span class="extracted-item-label">${d.label}</span>
+                ${escapeHtml(d.value)}
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      `;
+    }
+
+    // Call Metrics
+    html += `
+      <div class="analysis-group">
+        <div class="analysis-group-label"><i data-lucide="timer" style="width:12px;height:12px"></i> EFFECTIVENESS</div>
+        ${analysisRow('Time Wasted', formatDuration(m.duration_seconds || 0))}
+        ${analysisRow('Messages', (m.messages_exchanged || 0) + ' exchanged')}
+        <div style="margin:6px 0">
+          <div class="analysis-key" style="margin-bottom:4px">Scammer Frustration</div>
+          <div class="threat-bar">
+            <div class="threat-bar-track"><div class="threat-bar-fill ${frustLvl === 'extreme' ? 'high' : frustLvl}"></div></div>
+            <span class="threat-bar-label ${frustLvl === 'extreme' ? 'high' : frustLvl}">${(m.scammer_frustration_level || 'MEDIUM').toUpperCase()}</span>
+          </div>
+        </div>
+      </div>
+    `;
+
+    // Key Moments
+    const moments = a.key_moments || [];
+    if (moments.length > 0) {
+      html += `
+        <div class="analysis-group">
+          <div class="analysis-group-label"><i data-lucide="bookmark" style="width:12px;height:12px"></i> KEY MOMENTS</div>
+          <div class="key-moments">
+            ${moments.map(m => `<div class="key-moment">${escapeHtml(m)}</div>`).join('')}
+          </div>
+        </div>
+      `;
+    }
+
+    // Summary
+    if (a.summary) {
+      html += `
+        <div class="analysis-group">
+          <div class="analysis-group-label"><i data-lucide="file-text" style="width:12px;height:12px"></i> SUMMARY</div>
+          <div class="analysis-summary">${escapeHtml(a.summary)}</div>
+        </div>
+      `;
+    }
+
+    analysisCard.innerHTML = html;
+    lucide.createIcons();
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      analysisCard.classList.add('visible');
+    }));
+  }
+
+  function renderFallbackSummary(text) {
+    analysisCard.innerHTML = `
+      <div class="analysis-group">
+        <div class="analysis-group-label"><i data-lucide="file-text" style="width:12px;height:12px"></i> ANALYSIS SUMMARY</div>
+        <div class="analysis-summary">${escapeHtml(text)}</div>
+      </div>
+    `;
+    lucide.createIcons();
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      analysisCard.classList.add('visible');
+    }));
+  }
+
+  function analysisRow(key, value) {
+    return `<div class="analysis-row"><span class="analysis-key">${key}</span><span class="analysis-value">${escapeHtml(String(value))}</span></div>`;
+  }
+
+  // ── Timer ──────────────────────────────────────────────
+  function startTimer(startIso) {
+    callStartTime = startIso ? new Date(startIso).getTime() : Date.now();
+    if (timerInterval) clearInterval(timerInterval);
+    timerInterval = setInterval(() => {
+      const secs = Math.floor((Date.now() - callStartTime) / 1000);
+      const str = `${String(Math.floor(secs / 60)).padStart(2, '0')}:${String(secs % 60).padStart(2, '0')}`;
+      timerEl.textContent = str;
+      chatTimer.textContent = str;
+    }, 1000);
+  }
+
+  // ── Inactivity auto-drop (1 min no messages → drop call) ──
+  function resetInactivityTimer() {
+    if (inactivityTimeout) clearTimeout(inactivityTimeout);
+    inactivityTimeout = setTimeout(() => {
+      if (!activeCallSid || !liveCallSids.has(activeCallSid)) return;
+      console.log('[INACTIVITY] No messages for 60s — dropping call', activeCallSid);
+      // Add system message to chat
+      const notice = document.createElement('div');
+      notice.className = 'wa-day-sep';
+      notice.innerHTML = '<span style="color:var(--red)">Call auto-dropped — 1 min inactivity</span>';
+      feed.insertBefore(notice, typingIndicator);
+      feed.scrollTop = feed.scrollHeight;
+      // Drop the call
+      socket.emit('drop_call', { call_sid: activeCallSid });
+    }, INACTIVITY_LIMIT);
+  }
+
+  function clearInactivityTimer() {
+    if (inactivityTimeout) {
+      clearTimeout(inactivityTimeout);
+      inactivityTimeout = null;
+    }
+  }
+
+  // ── Demo Fallback ──────────────────────────────────────
+  setTimeout(() => {
+    if (!connected || Object.keys(callsData).length === 0) {
+      runDemoMode();
+    }
+  }, 3000);
+
+  function runDemoMode() {
+    const demoSid = 'DEMO-' + Date.now();
+    callsData[demoSid] = {
+      caller: '+91-98765-43210',
+      startTime: new Date().toISOString(),
+      status: 'active',
+      mode: 'demo',
+      lastMessage: ''
+    };
+    liveCallSids.add(demoSid);
+    renderCallList();
+    selectCall(demoSid);
+
+    sessionMeta.textContent = 'DEMO MODE — No backend connected';
+    threatTag.textContent = 'DEMO';
+    threatTag.style.background = 'rgba(88,166,255,0.1)';
+    threatTag.style.color = '#58a6ff';
+    threatTag.style.borderColor = 'rgba(88,166,255,0.3)';
+
+    const scenario = [
+      { s: 'scammer', text: 'Hello madam, I am calling from State Bank regarding your KYC update. Your account will be blocked in 2 hours.' },
+      { s: 'ai', text: 'Arre beta! KYC? Yeh kya hota hai? Mera Rahul bolta hai bank kabhi phone nahi karta...' },
+      { s: 'scammer', text: 'Madam this is urgent! Give me your Aadhaar number and OTP immediately!' },
+      { s: 'ai', text: 'Aadhaar... haan haan, ruko na beta. Chasma dhoondh rahi hoon. Drawer mein tha ya almirah mein...' },
+      { s: 'scammer', text: 'MADAM PLEASE HURRY! Your account will be frozen!' },
+      { s: 'ai', text: 'Arre itna gussa kyun karte ho? Khana khaya tumne? Awaz se lagta hai bhookhe ho...' },
+      { s: 'scammer', text: 'I am not hungry! Just give me the OTP that came on your phone!' },
+      { s: 'ai', text: 'Phone? Woh toh Rahul ke room mein charge pe laga hai. Ruko abhi laati hoon... oh meri kamar...' },
+    ];
+
+    let step = 0;
+
+    // Demo intel updates
+    setTimeout(() => {
+      document.getElementById('intelKey0').textContent = 'SCAMMER NAME';
+      document.getElementById('intelVal0').textContent = 'Rajesh Kumar';
+      document.getElementById('intelKey1').textContent = 'SCAM TYPE';
+      document.getElementById('intelVal1').textContent = 'KYC Fraud';
+      document.getElementById('intelKey2').textContent = 'CLAIMS TO BE';
+      document.getElementById('intelVal2').textContent = 'State Bank of India';
+      document.getElementById('intelVal3').textContent = 'Kolkata, India';
+    }, 4000);
+
+    function demoLoop() {
+      if (step < scenario.length) {
+        const item = scenario[step];
+
+        // Show typing for AI messages
+        if (item.s === 'ai') {
+          typingIndicator.classList.add('visible');
+          setTimeout(() => {
+            typingIndicator.classList.remove('visible');
+            addMessage(item.s, item.text, new Date().toISOString(), true);
+            aiStatusVal.textContent = 'DEFENDING';
+            aiStatusVal.style.color = 'var(--accent)';
+            callsData[demoSid].lastMessage = item.text.slice(0, 50);
+            renderCallList();
+            step++;
+            setTimeout(demoLoop, 2500);
+          }, 1500);
+        } else {
+          addMessage(item.s, item.text, new Date().toISOString(), true);
+          aiStatusVal.textContent = 'ANALYZING...';
+          aiStatusVal.style.color = 'var(--orange)';
+          callsData[demoSid].lastMessage = item.text.slice(0, 50);
+          renderCallList();
+          step++;
+          setTimeout(demoLoop, 2800);
+        }
+      } else {
+        // Loop back
+        setTimeout(() => {
+          addMessage('ai', 'Arre beta, sun rahe ho? Line kharab aa rahi hai...', new Date().toISOString(), true);
+          step = Math.max(0, step - 3);
+          setTimeout(demoLoop, 3000);
+        }, 4000);
+      }
+    }
+    setTimeout(demoLoop, 1500);
+  }
+
+  // ── Utility Functions ──────────────────────────────────
+  function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+  }
+
+  function formatCaller(caller) {
+    if (!caller || caller === 'Unknown' || caller === 'unknown') return 'Unknown Caller';
+    if (caller === 'web-client') return 'Web Client';
+    // Format phone number
+    if (caller.startsWith('+')) {
+      return caller;
+    }
+    return caller;
+  }
+
+  function formatTime(isoStr) {
+    if (!isoStr) return '';
+    try {
+      const d = new Date(isoStr);
+      return d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
+    } catch { return ''; }
+  }
+
+  function formatMessageTime(date) {
+    return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
+  }
+
+  function formatDuration(secs) {
+    if (!secs || secs <= 0) return '00:00';
+    const m = Math.floor(secs / 60);
+    const s = secs % 60;
+    return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+  }
+
+  function formatDateLabel(date) {
+    const today = new Date();
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+
+    if (date.toDateString() === today.toDateString()) return 'Today';
+    if (date.toDateString() === yesterday.toDateString()) return 'Yesterday';
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  }
+
+  // ── GSAP Animations ────────────────────────────────────
+  gsap.from('.sidebar', { x: -40, opacity: 0, duration: 0.6, ease: 'power3.out' });
+  gsap.from('.top-bar', { y: -20, opacity: 0, duration: 0.5, delay: 0.1, ease: 'power2.out' });
+  gsap.from('.intel-panel', { x: 40, opacity: 0, duration: 0.6, delay: 0.15, ease: 'power3.out' });
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,48 @@
+# === Environment & Secrets ===
+.env
+.env.*
+!.env.example
+
+# === Python ===
+venv/
+.venv/
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+dist/
+build/
+*.egg
+
+# === Database ===
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+
+# === ML Model Weights (too large for GitHub) ===
+Dataset/model_output/
+Dataset/dataset/
+
+# === IDE ===
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# === OS ===
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# === Logs ===
+*.log
+npm-debug.log*
+
+# === Misc ===
+*.bak
+*.tmp
+.claude/
